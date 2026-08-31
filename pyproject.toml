@@ -1,0 +1,43 @@
+[build-system]
+requires = ["hatchling>=1.27"]
+build-backend = "hatchling.build"
+
+[project]
+name = "otterai-mcp"
+version = "0.1.0"
+description = "Focused MCP server for organizing Otter.ai conversations"
+readme = "README.md"
+requires-python = ">=3.12"
+license = "MIT"
+authors = [{ name = "ChocoTonic" }]
+dependencies = [
+    "mcp>=2.1,<3",
+    "otterai-py @ git+https://github.com/ChocoTonic/otterai-py.git@076923a",
+    "python-dotenv>=1.2,<2",
+]
+
+[project.scripts]
+otterai-mcp = "otterai_mcp.cli:main"
+
+[dependency-groups]
+dev = [
+    "pytest>=8.4",
+    "pytest-asyncio>=1.1",
+    "ruff>=0.12",
+]
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/otterai_mcp"]
+
+[tool.hatch.metadata]
+allow-direct-references = true
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+
+[tool.ruff]
+line-length = 88
+target-version = "py312"
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "UP", "B", "SIM", "RUF"]
