@@ -1,6 +1,6 @@
 # Install on another machine
 
-This branch includes transcript discovery, Markdown export, and timestamp fixes recovered from local development. The library is pinned to a GitHub commit containing search support; no sibling checkout is required.
+This setup supports transcript discovery, Markdown export, and verified folder moves. Its Python library dependency is pinned to a GitHub commit and installed automatically; no sibling checkout is required.
 
 ```sh
 git clone --branch feat/transcript-research-handoff https://github.com/ChocoTonic/otterai-mcp.git
@@ -43,4 +43,3 @@ The local Codex logs contain the actual patch calls for these changes:
 
 The development-only editable sibling dependency is replaced with a remote Git pin. Original source worktrees remain untouched. Unrelated scratch files are excluded. Conversation contents and credentials are not published.
 
-Library prerequisite: https://github.com/ChocoTonic/otterai-py/pull/10
