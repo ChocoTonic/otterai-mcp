@@ -51,3 +51,8 @@ uv run otterai-mcp
 The server uses stdio transport. Folder moves default to preview mode and
 require `confirm=true` before changing remote state. Confirmed moves are read
 back from Otter and fail if the destination cannot be verified.
+
+## Install on another machine
+
+See [the handoff guide](docs/HANDOFF.md) for clone instructions, MCP configuration,
+credential setup, validation, and change provenance.
