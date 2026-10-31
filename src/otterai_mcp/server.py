@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from datetime import date
 from functools import partial
 from typing import Annotated, Any
 
@@ -33,7 +34,9 @@ def create_server(
         version=__version__,
         instructions=(
             "Use otter_list_unsorted for authoritative unfiled conversations. "
-            "Preview every move with confirm=false before setting confirm=true."
+            "Follow next_cursor whenever complete=false, including after an "
+            "empty filtered page. Preview every move with confirm=false before "
+            "setting confirm=true. Date bounds are inclusive UTC dates."
         ),
     )
 
@@ -50,10 +53,59 @@ def create_server(
         annotations=ToolAnnotations(read_only_hint=True, open_world_hint=True),
     )
     async def list_unsorted(
-        page_size: PageSize = 25, cursor: int | None = None
+        page_size: PageSize = 25,
+        cursor: int | None = None,
+        start_date: date | None = None,
+        end_date: date | None = None,
     ) -> dict[str, Any]:
         """List only owned conversations with no remote folder assignment."""
-        return await _thread(runtime.list_unsorted, page_size, cursor)
+        return await _thread(
+            runtime.list_unsorted, page_size, cursor, start_date, end_date
+        )
+
+    @server.tool(
+        name="otter_list_speeches",
+        annotations=ToolAnnotations(read_only_hint=True, open_world_hint=True),
+    )
+    async def list_speeches(
+        folder: str | None = None,
+        page_size: PageSize = 25,
+        cursor: str | None = None,
+        start_date: date | None = None,
+        end_date: date | None = None,
+    ) -> dict[str, Any]:
+        """List owned conversations or one exact folder with dates and cursors."""
+        return await _thread(
+            runtime.list_speeches,
+            folder,
+            page_size,
+            cursor,
+            start_date,
+            end_date,
+        )
+
+    @server.tool(
+        name="otter_search_speeches",
+        annotations=ToolAnnotations(read_only_hint=True, open_world_hint=True),
+    )
+    async def search_speeches(
+        query: Annotated[str, Field(min_length=1)],
+        page_size: PageSize = 25,
+        cursor: str | None = None,
+        folder: str | None = None,
+        start_date: date | None = None,
+        end_date: date | None = None,
+    ) -> dict[str, Any]:
+        """Search transcript text with snippets, speakers, dates, and cursors."""
+        return await _thread(
+            runtime.search_speeches,
+            query,
+            page_size,
+            cursor,
+            folder,
+            start_date,
+            end_date,
+        )
 
     @server.tool(
         name="otter_get_speeches",
@@ -83,4 +135,3 @@ def create_server(
         )
 
     return server
-

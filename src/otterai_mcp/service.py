@@ -3,7 +3,9 @@
 from __future__ import annotations
 
 import threading
+from datetime import UTC, date, datetime, time
 from typing import Any
+from urllib.parse import urlparse
 
 from otterai import OtterAI
 
@@ -49,8 +51,13 @@ class OtterService:
         )
 
     def list_unsorted(
-        self, page_size: int = 25, cursor: int | None = None
+        self,
+        page_size: int = 25,
+        cursor: int | None = None,
+        start_date: date | None = None,
+        end_date: date | None = None,
     ) -> dict[str, Any]:
+        self._validate_dates(start_date, end_date)
         with self._lock:
             self._login()
             data = self._data(
@@ -60,11 +67,108 @@ class OtterService:
                 "unsorted speech listing",
             )
         speeches = data.get("speeches", []) if isinstance(data, dict) else []
+        filtered = [
+            speech
+            for speech in speeches
+            if self._within_dates(speech.get("start_time"), start_date, end_date)
+        ]
         end_of_list = bool(data.get("end_of_list", True))
         return {
-            "speeches": [self._speech_summary(speech) for speech in speeches],
+            "speeches": [self._speech_summary(speech) for speech in filtered],
             "next_cursor": None if end_of_list else data.get("last_load_ts"),
             "complete": end_of_list,
+        }
+
+    def list_speeches(
+        self,
+        folder: str | None = None,
+        page_size: int = 25,
+        cursor: str | None = None,
+        start_date: date | None = None,
+        end_date: date | None = None,
+    ) -> dict[str, Any]:
+        self._validate_dates(start_date, end_date)
+        destination = None
+        with self._lock:
+            self._login()
+            if folder is None:
+                numeric_cursor = int(cursor) if cursor is not None else None
+                data = self._data(
+                    self.client.get_speeches(
+                        folder=0,
+                        page_size=page_size,
+                        source="owned",
+                        last_load_ts=numeric_cursor,
+                    ),
+                    "speech listing",
+                )
+                next_cursor = data.get("last_load_ts")
+            else:
+                destination = self._resolve_folder(folder, self.list_folders())
+                data = self._data(
+                    self.client.list_folder_speeches(
+                        destination["id"],
+                        page_size=page_size,
+                        last_load_speech_id=cursor,
+                        speech_metadata=True,
+                    ),
+                    "folder speech listing",
+                )
+                next_cursor = data.get("last_load_speech_id")
+
+        speeches = data.get("speeches", []) if isinstance(data, dict) else []
+        filtered = [
+            speech
+            for speech in speeches
+            if self._within_dates(speech.get("start_time"), start_date, end_date)
+        ]
+        complete = bool(data.get("end_of_list", True))
+        return {
+            "speeches": [self._speech_listing(speech) for speech in filtered],
+            "folder": (
+                {"id": destination["id"], "name": destination["name"]}
+                if destination
+                else None
+            ),
+            "next_cursor": None if complete else str(next_cursor),
+            "complete": complete,
+        }
+
+    def search_speeches(
+        self,
+        query: str,
+        page_size: int = 25,
+        cursor: str | None = None,
+        folder: str | None = None,
+        start_date: date | None = None,
+        end_date: date | None = None,
+    ) -> dict[str, Any]:
+        self._validate_dates(start_date, end_date)
+        folders = self.list_folders()
+        folder_by_id = {str(item["id"]): item for item in folders}
+        destination = self._resolve_folder(folder, folders) if folder else None
+        with self._lock:
+            self._login()
+            data = self._data(
+                self.client.search_speeches(query, size=page_size, scroll_id=cursor),
+                "speech search",
+            )
+
+        hits = data.get("hits", []) if isinstance(data, dict) else []
+        filtered = [
+            hit
+            for hit in hits
+            if (
+                destination is None
+                or str(hit.get("folder_id")) == str(destination["id"])
+            )
+            and self._within_dates(hit.get("start_time"), start_date, end_date)
+        ]
+        complete = len(hits) < page_size
+        return {
+            "hits": [self._search_hit(hit, folder_by_id) for hit in filtered],
+            "next_cursor": None if complete else data.get("scroll_id"),
+            "complete": complete,
         }
 
     def get_speeches(
@@ -74,6 +178,7 @@ class OtterService:
         with self._lock:
             self._login()
             for speech_id in speech_ids:
+                speech_id = self._speech_id(speech_id)
                 data = self._data(
                     self.client.get_speech(speech_id), f"speech fetch for {speech_id}"
                 )
@@ -159,9 +264,7 @@ class OtterService:
         result["summary"] = speech.get("short_abstract_summary") or speech.get(
             "summary"
         )
-        result["outline"] = cls._normalize_outline(
-            speech.get("speech_outline") or []
-        )
+        result["outline"] = cls._normalize_outline(speech.get("speech_outline") or [])
         if include_transcript:
             result["transcript"] = cls._normalize_transcript(speech)
         return result
@@ -186,6 +289,83 @@ class OtterService:
                 else None
             ),
         }
+
+    @classmethod
+    def _speech_listing(cls, speech: dict[str, Any]) -> dict[str, Any]:
+        result = cls._speech_summary(speech)
+        result["summary"] = speech.get("short_abstract_summary") or speech.get(
+            "summary"
+        )
+        result["speakers"] = [
+            speaker.get("speaker_name")
+            for speaker in (speech.get("speakers") or [])
+            if speaker.get("speaker_name")
+        ]
+        return result
+
+    @staticmethod
+    def _search_hit(
+        hit: dict[str, Any], folder_by_id: dict[Any, dict[str, Any]]
+    ) -> dict[str, Any]:
+        speech_id = hit.get("speech_otid")
+        folder = folder_by_id.get(str(hit.get("folder_id")))
+        return {
+            "id": speech_id,
+            "title": hit.get("title") or "Untitled",
+            "start_time": hit.get("start_time"),
+            "duration_seconds": hit.get("duration"),
+            "folder": (
+                {"id": folder["id"], "name": folder["name"]} if folder else None
+            ),
+            "speakers": hit.get("speaker") or [],
+            "matches": [
+                {
+                    "speaker": match.get("matched_speaker_name")
+                    or match.get("speaker_name"),
+                    "start_ms": match.get("start_offset"),
+                    "text": match.get("matched_transcript", ""),
+                }
+                for match in (hit.get("matched_transcripts") or [])
+            ],
+            "url": f"https://otter.ai/u/{speech_id}" if speech_id else None,
+        }
+
+    @staticmethod
+    def _within_dates(
+        timestamp: Any, start_date: date | None, end_date: date | None
+    ) -> bool:
+        if timestamp is None:
+            return start_date is None and end_date is None
+        value = int(timestamp)
+        if start_date is not None:
+            start = int(datetime.combine(start_date, time.min, UTC).timestamp())
+            if value < start:
+                return False
+        if end_date is not None:
+            end = int(datetime.combine(end_date, time.max, UTC).timestamp())
+            if value > end:
+                return False
+        return True
+
+    @staticmethod
+    def _validate_dates(start_date: date | None, end_date: date | None) -> None:
+        if start_date is not None and end_date is not None and start_date > end_date:
+            raise ValueError("start_date must be on or before end_date")
+
+    @staticmethod
+    def _speech_id(value: str) -> str:
+        candidate = str(value).strip()
+        parsed = urlparse(candidate)
+        if parsed.scheme or parsed.netloc:
+            if parsed.scheme != "https" or parsed.netloc.lower() != "otter.ai":
+                raise ValueError(f"unsupported Otter URL: {candidate!r}")
+            parts = [part for part in parsed.path.split("/") if part]
+            if len(parts) != 2 or parts[0] != "u":
+                raise ValueError(f"unsupported Otter URL: {candidate!r}")
+            candidate = parts[1]
+        if not candidate or "/" in candidate:
+            raise ValueError(f"invalid speech ID: {candidate!r}")
+        return candidate
 
     @staticmethod
     def _normalize_outline(outline: list[dict[str, Any]]) -> list[dict[str, Any]]:
@@ -214,3 +394,4 @@ class OtterService:
             }
             for segment in (speech.get("transcripts") or [])
         ]
+

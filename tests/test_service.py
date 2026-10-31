@@ -1,3 +1,4 @@
+from datetime import date
 from unittest.mock import Mock
 
 import pytest
@@ -62,6 +63,95 @@ def test_list_unsorted_uses_library_and_strips_raw_fields(service, client):
     assert "pubsub_jwt" not in result["speeches"][0]
 
 
+def test_list_speeches_supports_owned_pagination_and_dates(service, client):
+    client.get_speeches.return_value = response(
+        {
+            "speeches": [
+                {
+                    "otid": "inside",
+                    "title": "Inside range",
+                    "start_time": 1785628800,
+                    "speakers": [{"speaker_name": "Steve"}],
+                    "pubsub_jwt": "must-not-leak",
+                },
+                {
+                    "otid": "outside",
+                    "title": "Outside range",
+                    "start_time": 1785542399,
+                },
+            ],
+            "end_of_list": False,
+            "last_load_ts": 1785500000,
+        }
+    )
+
+    result = service.list_speeches(
+        page_size=20, cursor="1785700000", start_date=date(2026, 8, 2)
+    )
+
+    client.get_speeches.assert_called_once_with(
+        folder=0,
+        page_size=20,
+        source="owned",
+        last_load_ts=1785700000,
+    )
+    assert [item["id"] for item in result["speeches"]] == ["inside"]
+    assert result["speeches"][0]["speakers"] == ["Steve"]
+    assert result["next_cursor"] == "1785500000"
+
+
+def test_list_speeches_supports_exact_folder(service, client):
+    client.list_folder_speeches.return_value = response(
+        {"speeches": [], "end_of_list": True, "last_load_speech_id": "last"}
+    )
+
+    result = service.list_speeches(folder="2_work", cursor="previous")
+
+    client.list_folder_speeches.assert_called_once_with(
+        2,
+        page_size=25,
+        last_load_speech_id="previous",
+        speech_metadata=True,
+    )
+    assert result["folder"] == {"id": 2, "name": "2_work"}
+    assert result["complete"] is True
+
+
+def test_search_speeches_normalizes_and_filters_hits(service, client):
+    client.search_speeches.return_value = response(
+        {
+            "hits": [
+                {
+                    "speech_otid": "speech-1",
+                    "title": "Codex review",
+                    "folder_id": 2,
+                    "start_time": 1785628800,
+                    "duration": 60,
+                    "speaker": ["Steve"],
+                    "matched_transcripts": [
+                        {
+                            "matched_speaker_name": "Steve",
+                            "start_offset": 100,
+                            "matched_transcript": "We used Codex.",
+                        }
+                    ],
+                    "sparse_rerank_text": "must-not-leak",
+                }
+            ],
+            "scroll_id": "next-page",
+        }
+    )
+
+    result = service.search_speeches("Codex", page_size=1, folder="2_work")
+
+    client.search_speeches.assert_called_once_with("Codex", size=1, scroll_id=None)
+    assert result["hits"][0]["id"] == "speech-1"
+    assert result["hits"][0]["matches"][0]["speaker"] == "Steve"
+    assert result["hits"][0]["matches"][0]["start_ms"] == 100
+    assert "sparse_rerank_text" not in result["hits"][0]
+    assert result["next_cursor"] == "next-page"
+
+
 def test_get_speeches_normalizes_transcript(service, client):
     client.get_speech.return_value = response(
         {
@@ -108,6 +198,24 @@ def test_get_speeches_accepts_null_outline_and_transcript(service, client):
     assert result[0]["transcript"] == []
 
 
+def test_get_speeches_accepts_otter_url(service, client):
+    client.get_speech.return_value = response(
+        {"speech": {"otid": "speech-1", "title": "Call"}}
+    )
+
+    service.get_speeches(
+        ["https://otter.ai/u/speech-1?tab=chat&view=transcript"],
+        include_transcript=False,
+    )
+
+    client.get_speech.assert_called_once_with("speech-1")
+
+
+def test_get_speeches_rejects_non_otter_url(service):
+    with pytest.raises(ValueError, match="unsupported Otter URL"):
+        service.get_speeches(["https://example.com/u/speech-1"])
+
+
 def test_move_preview_does_not_mutate(service, client):
     client.get_speech.return_value = response(
         {"speech": {"otid": "speech-1", "title": "Call", "folder": None}}
@@ -121,9 +229,7 @@ def test_move_preview_does_not_mutate(service, client):
 
 def test_move_uses_library_and_verifies(service, client):
     client.get_speech.side_effect = [
-        response(
-            {"speech": {"otid": "speech-1", "title": "Call", "folder": None}}
-        ),
+        response({"speech": {"otid": "speech-1", "title": "Call", "folder": None}}),
         response(
             {
                 "speech": {

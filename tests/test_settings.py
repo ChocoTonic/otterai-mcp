@@ -21,4 +21,3 @@ def test_settings_requires_credentials(monkeypatch):
 
     with pytest.raises(RuntimeError, match="OTTERAI_USERNAME"):
         Settings.from_env()
-
