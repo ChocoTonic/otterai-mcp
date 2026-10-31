@@ -25,4 +25,3 @@ class Settings:
                 "OTTERAI_MCP_ENV_FILE"
             )
         return cls(username=username, password=password)
-

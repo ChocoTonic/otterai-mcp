@@ -1,5 +1,5 @@
 version = 1
-revision = 5
+revision = 3
 requires-python = ">=3.12"
 resolution-markers = [
     "python_full_version >= '3.14'",
@@ -635,7 +635,7 @@ dev = [
 requires-dist = [
     { name = "certifi", specifier = ">=2026.10.19" },
     { name = "mcp", specifier = ">=2.1,<3" },
-    { name = "otterai-py", git = "https://github.com/ChocoTonic/otterai-py.git?rev=076923a" },
+    { name = "otterai-py", git = "https://github.com/ChocoTonic/otterai-py.git?rev=f794917" },
     { name = "python-dotenv", specifier = ">=1.2,<2" },
 ]
 
@@ -649,9 +649,10 @@ dev = [
 [[package]]
 name = "otterai-py"
 version = "0.1.0"
-source = { git = "https://github.com/ChocoTonic/otterai-py.git?rev=076923a#076923a68f8a07efc65e8c63a59c67d705f5e1da" }
+source = { git = "https://github.com/ChocoTonic/otterai-py.git?rev=f794917#f794917280e5e5110dae348dad619412f0b293e4" }
 dependencies = [
     { name = "black" },
+    { name = "certifi" },
     { name = "pytest" },
     { name = "pytest-cov" },
     { name = "python-dotenv" },

@@ -13,7 +13,7 @@ authors = [{ name = "ChocoTonic" }]
 dependencies = [
     "certifi>=2026.10.19",
     "mcp>=2.1,<3",
-    "otterai-py @ git+https://github.com/ChocoTonic/otterai-py.git@076923a",
+    "otterai-py @ git+https://github.com/ChocoTonic/otterai-py.git@f794917",
     "python-dotenv>=1.2,<2",
 ]
 
