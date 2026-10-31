@@ -2,8 +2,13 @@
 
 from __future__ import annotations
 
+import json
+import os
+import re
+import tempfile
 import threading
 from datetime import UTC, date, datetime, time
+from pathlib import Path
 from typing import Any
 from urllib.parse import urlparse
 
@@ -186,6 +191,60 @@ class OtterService:
                 results.append(self._speech_detail(speech, include_transcript))
         return results
 
+    def export_speeches_markdown(
+        self,
+        speech_ids: list[str],
+        output_directory: str,
+        overwrite: bool = False,
+    ) -> dict[str, Any]:
+        """Export normalized speeches as lossless JSON embedded in Markdown."""
+        destination = Path(output_directory)
+        if not destination.is_absolute():
+            raise ValueError("output_directory must be an absolute path")
+        destination = destination.resolve()
+
+        speeches = self.get_speeches(speech_ids, include_transcript=True)
+        exports = [
+            (speech, destination / self._markdown_filename(speech))
+            for speech in speeches
+        ]
+        collisions = [path for _, path in exports if path.exists()]
+        if collisions and not overwrite:
+            paths = ", ".join(str(path) for path in collisions)
+            raise FileExistsError(f"refusing to overwrite existing exports: {paths}")
+
+        destination.mkdir(parents=True, exist_ok=True)
+        written = []
+        for speech, path in exports:
+            payload = (
+                "# Otter transcript export\n\n"
+                "The fenced JSON below preserves every normalized metadata, outline, "
+                "and transcript field returned by `otter_get_speeches`.\n\n"
+                "```json\n"
+                f"{json.dumps(speech, ensure_ascii=False, indent=2)}\n"
+                "```\n"
+            )
+            with tempfile.NamedTemporaryFile(
+                mode="w",
+                encoding="utf-8",
+                dir=destination,
+                prefix=f".{path.name}.",
+                suffix=".tmp",
+                delete=False,
+            ) as handle:
+                handle.write(payload)
+                temporary_path = Path(handle.name)
+            os.replace(temporary_path, path)
+            written.append(
+                {
+                    "id": speech["id"],
+                    "title": speech["title"],
+                    "path": str(path),
+                    "transcript_segments": len(speech.get("transcript") or []),
+                }
+            )
+        return {"format": "markdown+json", "files": written}
+
     def move_speeches(
         self, speech_ids: list[str], destination: str, confirm: bool
     ) -> dict[str, Any]:
@@ -366,6 +425,19 @@ class OtterService:
         if not candidate or "/" in candidate:
             raise ValueError(f"invalid speech ID: {candidate!r}")
         return candidate
+
+    @staticmethod
+    def _markdown_filename(speech: dict[str, Any]) -> str:
+        timestamp = speech.get("start_time")
+        day = (
+            datetime.fromtimestamp(int(timestamp), UTC).date().isoformat()
+            if timestamp is not None
+            else "unknown-date"
+        )
+        title = re.sub(r"[^a-z0-9]+", "-", str(speech.get("title", "untitled")).lower())
+        title = title.strip("-")[:80] or "untitled"
+        speech_id = re.sub(r"[^A-Za-z0-9_-]+", "-", str(speech.get("id", "unknown")))
+        return f"{day}_{title}_{speech_id}.md"
 
     @staticmethod
     def _normalize_outline(outline: list[dict[str, Any]]) -> list[dict[str, Any]]:

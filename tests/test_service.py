@@ -216,6 +216,53 @@ def test_get_speeches_rejects_non_otter_url(service):
         service.get_speeches(["https://example.com/u/speech-1"])
 
 
+def test_export_speeches_markdown_preserves_normalized_payload(
+    service, client, tmp_path
+):
+    client.get_speech.return_value = response(
+        {
+            "speech": {
+                "otid": "speech-1",
+                "title": "Emma / Steve 1:1",
+                "start_time": 1785628800,
+                "speakers": [{"id": 7, "speaker_name": "Steve"}],
+                "transcripts": [
+                    {
+                        "speaker_id": 7,
+                        "start_offset": 16_000,
+                        "end_offset": 32_000,
+                        "transcript": "Line one\nLine two",
+                    }
+                ],
+            }
+        }
+    )
+
+    result = service.export_speeches_markdown(["speech-1"], str(tmp_path))
+
+    path = tmp_path / "2026-08-02_emma-steve-1-1_speech-1.md"
+    assert result["files"][0]["path"] == str(path)
+    content = path.read_text()
+    assert '"speaker": "Steve"' in content
+    assert '"text": "Line one\\nLine two"' in content
+    assert result["files"][0]["transcript_segments"] == 1
+
+
+def test_export_speeches_markdown_rejects_relative_path(service):
+    with pytest.raises(ValueError, match="absolute path"):
+        service.export_speeches_markdown(["speech-1"], "relative")
+
+
+def test_export_speeches_markdown_refuses_overwrite(service, client, tmp_path):
+    client.get_speech.return_value = response(
+        {"speech": {"otid": "speech-1", "title": "Call"}}
+    )
+    service.export_speeches_markdown(["speech-1"], str(tmp_path))
+
+    with pytest.raises(FileExistsError, match="refusing to overwrite"):
+        service.export_speeches_markdown(["speech-1"], str(tmp_path))
+
+
 def test_move_preview_does_not_mutate(service, client):
     client.get_speech.return_value = response(
         {"speech": {"otid": "speech-1", "title": "Call", "folder": None}}

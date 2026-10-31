@@ -12,12 +12,18 @@ does not implement or call Otter endpoints directly.
 - `otter_list_speeches`: list owned or folder-scoped conversations with dates and pagination.
 - `otter_search_speeches`: search transcript text with speaker-labeled snippets.
 - `otter_get_speeches`: fetch safe metadata and optional transcripts by ID.
+- `otter_export_speeches_markdown`: write lossless normalized transcript payloads
+  to local Markdown files without changing Otter.
 - `otter_move_speeches`: preview or confirm verified folder moves.
 
 `otter_get_speeches` accepts raw IDs and `https://otter.ai/u/...` URLs. No
 upload, download, delete, recording, speaker, notification, group, account, or
 arbitrary API tools are exposed.
 
+Markdown export requires an absolute output directory. It refuses to replace an
+existing file unless `overwrite=true`; each file embeds the complete normalized
+speech payload as JSON so transcript segment text, speakers, and timestamps are
+not dropped or reflowed.
 
 ## Configuration
 

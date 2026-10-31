@@ -118,6 +118,28 @@ def create_server(
         return await _thread(runtime.get_speeches, speech_ids, include_transcript)
 
     @server.tool(
+        name="otter_export_speeches_markdown",
+        annotations=ToolAnnotations(
+            read_only_hint=False,
+            destructive_hint=False,
+            idempotent_hint=True,
+            open_world_hint=False,
+        ),
+    )
+    async def export_speeches_markdown(
+        speech_ids: SpeechIds,
+        output_directory: str,
+        overwrite: bool = False,
+    ) -> dict[str, Any]:
+        """Export exact conversations to lossless local Markdown files."""
+        return await _thread(
+            runtime.export_speeches_markdown,
+            speech_ids,
+            output_directory,
+            overwrite,
+        )
+
+    @server.tool(
         name="otter_move_speeches",
         annotations=ToolAnnotations(
             read_only_hint=False,

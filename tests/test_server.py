@@ -38,6 +38,7 @@ async def test_server_advertises_only_focused_tools():
         "otter_list_speeches",
         "otter_search_speeches",
         "otter_get_speeches",
+        "otter_export_speeches_markdown",
         "otter_move_speeches",
     }
     search_schema = tools["otter_search_speeches"].input_schema
@@ -51,5 +52,6 @@ async def test_server_advertises_only_focused_tools():
         "end_date",
     }
     assert tools["otter_list_folders"].annotations.read_only_hint is True
+    assert tools["otter_export_speeches_markdown"].annotations.read_only_hint is False
     assert tools["otter_move_speeches"].annotations.read_only_hint is False
     assert tools["otter_move_speeches"].annotations.destructive_hint is False
