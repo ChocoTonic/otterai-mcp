@@ -381,7 +381,7 @@ class OtterService:
                 {
                     "speaker": match.get("matched_speaker_name")
                     or match.get("speaker_name"),
-                    "start_ms": match.get("start_offset"),
+                    "start_ms": OtterService._offset_ms(match.get("start_offset")),
                     "text": match.get("matched_transcript", ""),
                 }
                 for match in (hit.get("matched_transcripts") or [])
@@ -444,8 +444,8 @@ class OtterService:
         return [
             {
                 "title": item.get("text"),
-                "start_ms": item.get("start_offset"),
-                "end_ms": item.get("end_offset"),
+                "start_ms": OtterService._offset_ms(item.get("start_offset")),
+                "end_ms": OtterService._offset_ms(item.get("end_offset")),
             }
             for item in outline
         ]
@@ -460,10 +460,16 @@ class OtterService:
             {
                 "speaker": speakers.get(segment.get("speaker_id"))
                 or f"Speaker {segment.get('label', '?')}",
-                "start_ms": segment.get("start_offset"),
-                "end_ms": segment.get("end_offset"),
+                "start_ms": OtterService._offset_ms(segment.get("start_offset")),
+                "end_ms": OtterService._offset_ms(segment.get("end_offset")),
                 "text": segment.get("transcript", ""),
             }
             for segment in (speech.get("transcripts") or [])
         ]
 
+    @staticmethod
+    def _offset_ms(value: Any) -> int | None:
+        """Convert Otter's 1/16-millisecond transcript ticks to milliseconds."""
+        if value is None:
+            return None
+        return round(int(value) / 16)

@@ -131,7 +131,7 @@ def test_search_speeches_normalizes_and_filters_hits(service, client):
                     "matched_transcripts": [
                         {
                             "matched_speaker_name": "Steve",
-                            "start_offset": 100,
+                            "start_offset": 1_600,
                             "matched_transcript": "We used Codex.",
                         }
                     ],
@@ -176,7 +176,7 @@ def test_get_speeches_normalizes_transcript(service, client):
 
     assert result[0]["folder"] == {"id": 1, "name": "1_general"}
     assert result[0]["transcript"] == [
-        {"speaker": "Steve", "start_ms": 10, "end_ms": 20, "text": "Hello"}
+        {"speaker": "Steve", "start_ms": 1, "end_ms": 1, "text": "Hello"}
     ]
 
 
@@ -246,6 +246,33 @@ def test_export_speeches_markdown_preserves_normalized_payload(
     assert '"speaker": "Steve"' in content
     assert '"text": "Line one\\nLine two"' in content
     assert result["files"][0]["transcript_segments"] == 1
+
+
+def test_normalization_converts_otter_ticks_to_milliseconds(service, client):
+    client.get_speech.return_value = response(
+        {
+            "speech": {
+                "otid": "speech-1",
+                "speech_outline": [
+                    {"text": "Topic", "start_offset": 16_000, "end_offset": 32_000}
+                ],
+                "transcripts": [
+                    {
+                        "start_offset": 1_600,
+                        "end_offset": 3_200,
+                        "transcript": "Hello",
+                    }
+                ],
+            }
+        }
+    )
+
+    result = service.get_speeches(["speech-1"])[0]
+
+    assert result["outline"][0]["start_ms"] == 1_000
+    assert result["outline"][0]["end_ms"] == 2_000
+    assert result["transcript"][0]["start_ms"] == 100
+    assert result["transcript"][0]["end_ms"] == 200
 
 
 def test_export_speeches_markdown_rejects_relative_path(service):
