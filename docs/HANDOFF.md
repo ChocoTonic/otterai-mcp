@@ -42,4 +42,3 @@ The local Codex logs contain the actual patch calls for these changes:
 | `01a08a20-aad3-7253-80c9-41700b59ae33` (September 10, 2026) | Local Markdown export, search schema regression coverage, tick-to-millisecond conversion |
 
 The development-only editable sibling dependency is replaced with a remote Git pin. Original source worktrees remain untouched. Unrelated scratch files are excluded. Conversation contents and credentials are not published.
-
